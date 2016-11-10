@@ -295,10 +295,10 @@ SELECT    AccountCalc.AccountSFID,
           --ActivityCategory
           CASE WHEN ( Event_SF.Event_Purpose__c IN ('Relationship Visit','Initial','Follow Up','Closing') 
                       AND Event_SF.Event_Type__c = 'In Person Visit'     )
-                    OR Event_SF.Event_Type__c = 'Opportunity Visit - For Opportunity Goal'
+                    OR Event_SF.Event_Type__c = 'Opportunity Visit'
                THEN 'Visit'
                WHEN Event_SF.Event_Type__c IN ('Phone Appointment','Web Visit')
-                    AND Event_SF.Event_Purpose__c IN ('Initial','Follow Up','Intro PA','Follow Up PA','Closing PA','Closing')
+                    AND Event_SF.Event_Purpose__c IN ('Initial','Follow Up PA','Closing PA','Closing')
                THEN 'Activity'
                WHEN Event_SF.Event_Type__c = 'Prospect Meeting Attendee - Count as Visit'
                THEN 'Prospect Meeting'
@@ -326,13 +326,13 @@ WHERE     Event_SF.AccountId IS NOT NULL
           AND Event_SF.IsDeleted = 0 
           AND Event_SF.Cancelled_Did_Not_Occur__c = 0 
           --Visit types that count
-          AND ( ( Event_SF.Event_Purpose__c IN ('Relationship Visit','Initial','Follow Up','Closing') 
+          AND ( ( Event_SF.Event_Purpose__c IN ('Relationship Visit') 
                   AND Event_SF.Event_Type__c = 'In Person Visit')
                 --Activity types that count
                 OR (  Event_SF.Event_Type__c IN ('Phone Appointment','Web Visit')
                       AND Event_SF.Event_Purpose__c IN ('Initial','Follow Up','Intro PA','Follow Up PA','Closing PA','Closing') )
                 --Other Events that count
-                OR Event_SF.Event_Type__c IN ('Opportunity Visit - For Opportunity Goal','Prospect Meeting Attendee - Count as Visit')     )
+                OR Event_SF.Event_Type__c IN ('Opportunity Visit - For Opportunity Goal')     )
 
 /***********************************************************************************************************************************************
 MSMK_Activities
@@ -380,7 +380,7 @@ FROM      DataAnalysis.dbo.MSMK_Activities_Raw AS Activities_Raw
                                                           MIN(Activities_Raw.EventCreatedDate) AS EventCreatedDate
                                                 FROM      DataAnalysis.dbo.MSMK_Activities_Raw AS Activities_Raw
                                                 WHERE     Activities_Raw.ActivityCategory = 'Visit'
-                                                          AND ISNULL( Activities_Raw.EventPurpose, '') NOT IN ('Follow Up','Closing')
+                                                          AND ISNULL( Activities_Raw.EventPurpose, '') NOT IN ('Follow Up')
                                                 GROUP BY  Activities_Raw.AccountSFID,
                                                           Activities_Raw.ActivityMonth,
                                                           Activities_Raw.ActivityYear,
@@ -396,7 +396,7 @@ FROM      DataAnalysis.dbo.MSMK_Activities_Raw AS Activities_Raw
                                                    AND Activities_Raw.ActivityYear = Qry_CRCount.ActivityYear 
                                                    AND Activities_Raw.ActivityMonth = Qry_CRCount.ActivityMonth
                                                    AND Activities_Raw.ActivityCategory = 'Visit'
-                                                   AND ISNULL( Activities_Raw.EventPurpose, '') NOT IN ('Follow Up','Closing')
+                                                   AND ISNULL( Activities_Raw.EventPurpose, '') NOT IN ('Follow Up')
                         WHERE     Qry_CRCount.AccountSFID IS NOT NULL     ) 
                      AS Qry_CRCount_Extract 
                         ON Activities_Raw.EventSFID = Qry_CRCount_Extract.EventSFID
@@ -404,7 +404,7 @@ FROM      DataAnalysis.dbo.MSMK_Activities_Raw AS Activities_Raw
           --JOIN Leads Passed prior to Opp First Visited Date
           LEFT JOIN  (  SELECT    VisitsRaw_x_Opp.OppCounterID AS OppCounterID, 
                                   COUNT( CASE WHEN LeadMtM_x_OppChannel.LeadChannel = 'OAB' THEN 1 ELSE NULL END ) AS OAB_Leads, 
-                                  COUNT( CASE WHEN LeadMtM_x_OppChannel.LeadChannel = 'Non-OAB' THEN 1 ELSE NULL END ) AS NonOAB_Leads
+                                  COUNT( CASE WHEN LeadMtM_x_OppChannel.LeadChannel = 'Non-OAB' THEN 0 ELSE NULL END ) AS NonOAB_Leads
                         FROM      --Group VisitsRaw by Opportunity to find first visit date
                                   (  SELECT    Activities_Raw.OppCounterID AS OppCounterID,
                                                MIN (Activities_Raw.ActivityDate) AS MinActivityDate
@@ -446,7 +446,7 @@ FROM      DataAnalysis.dbo.MSMK_Activities_Raw AS Activities_Raw
                                           AND Activities_Raw.Program != 'BIXX' ) )
                                    --Only count Relationship Visits for Rev Cycle Principals 
                                    AND ( Activities_Raw.AssignedRoleRCP = 1 
-                                         OR Activities_Raw.EventPurpose != 'Relationship Visit'     )
+                                         OR Activities_Raw.EventPurpose = 'Relationship Visit'     )
                                    AND Activities_Raw.ActivityCategory = 'Visit'
                         GROUP BY   Activities_Raw.AccountCounterID, 
                                    Activities_Raw.ProgramCounterID, 
@@ -506,7 +506,7 @@ SELECT    Visits.EventSFID AS Id,
 INTO      DataAnalysis.dbo.TblData_VisitsthatCount_SF
 FROM      DataAnalysis.dbo.MSMK_Activities AS Visits
           LEFT JOIN     DataAnalysis.dbo.MS_Accounts AS AccountCalc ON Visits.AccountSFID = AccountCalc.AccountSFID
-WHERE     Visits.ActivityCategory = 'Visit'
+WHERE     Visits.ActivityCategory = 'Visits'
 
 /***********************************************************************************************************************************************
 MSMK_NBB_Binder
@@ -564,7 +564,7 @@ FROM      DBAmp_SF.dbo.NBB__c AS NBB_SF
                                    INNER JOIN DBAmp_SF.dbo.RecordType AS RT_NBB ON NBB_SF.RecordTypeId = RT_NBB.Id
                                    LEFT JOIN  DBAmp_SF.dbo.Program__c AS Program_SF ON NBB_SF.Program__c = Program_SF.Id
                          WHERE     NBB_SF.Opportunity__c IS NOT NULL
-                                   AND NBB_SF.NBB_Type__c IN ('Base Fee', 'Shadow Credit', 'Posted Risk')
+                                   AND NBB_SF.NBB_Type__c IN ('Base Fee', 'Shadow Credit')
                                    AND RT_NBB.Name = 'Standard'
                          GROUP BY  NBB_SF.Opportunity__c     ) 
                       AS NBB_x_Opp ON Opp_SF.Id = NBB_x_Opp.OppSFId
