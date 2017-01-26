@@ -7,8 +7,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 -- =============================================
 -- Author:          <Whitt, Finis>
--- Create date: <January, 2015>
--- Description:     <This is the script to update the Member Services Strat&Ops Analytics Tables>
+-- Create date:     <January, 2015>
 -- =============================================
 ALTER PROCEDURE [dbo].[MSSO_AnalyticsDB]
 
@@ -54,46 +53,47 @@ TopParent_Calculation
      Use: Create Top_Parent_Counter_Id field based on Account Hierarchy (because the field in SF may not be updated yet)
 ***********************************************************************************************************************************************/
 
-/**
-IF OBJECT_ID('DataAnalysis.dbo.MS_TopParent_Calc', 'U') IS NOT NULL
-   DROP TABLE DataAnalysis.dbo.MS_TopParent_Calc
+IF OBJECT_ID('DataAnalysis.dbo.MS_TopParent_Calc', 'U') IS NULL
 
-CREATE TABLE DataAnalysis.dbo.MS_TopParent_Calc (
-AccountId    NVARCHAR(18), 
-TopParentId  NVARCHAR(18)     )
-**/
+CREATE TABLE    DataAnalysis.dbo.MS_TopParent_Calc 
+                (
+                AccountID    NVARCHAR(18), 
+                TopParentID  NVARCHAR(18)  
+                );
+ELSE
 
-TRUNCATE TABLE DataAnalysis.dbo.MS_TopParent_Calc
+TRUNCATE TABLE  DataAnalysis.dbo.MS_TopParent_Calc;
 
---CREATE TABLE OF ALL ACCOUNTS
+INSERT INTO     DataAnalysis.dbo.MS_TopParent_Calc
+                (
+                AccountID
+                , TopParentID
+                )
+SELECT          Account.Id, 
+                ISNULL( Account.ParentId, Account.Id )
+FROM            DBAmp_SF.dbo.Account;
 
-INSERT INTO DataAnalysis.dbo.MS_TopParent_Calc
-
-SELECT    Account_SF.Id, 
-          ISNULL( Account_SF.ParentId, Account_SF.Id )
-FROM      DBAmp_SF.dbo.Account AS Account_SF
-
---UPDATE ACCOUNT PARENT TO PARENT'S PARENT
-
-DECLARE @LoopCounter INT
-SET @LoopCounter = 0     
+DECLARE         @LoopCounter INT
+SET             @LoopCounter = 0     
 
 WHILE     
-  ( SELECT    COUNT( CASE WHEN Account_SF.ParentId IS NOT NULL 
-                          THEN 1 
-                          ELSE NULL END )
-    FROM      DataAnalysis.dbo.MS_TopParent_Calc AS Tops
-              LEFT JOIN  DBAmp_SF.dbo.Account AS Account_SF ON Tops.TopParentId = Account_SF.Id ) > 0
-  AND @LoopCounter < 20
+    (   SELECT      COUNT( CASE 
+                    WHEN Account.ParentId IS NOT NULL 
+                    THEN 1 ELSE NULL END )
+        FROM        DataAnalysis.dbo.MS_TopParent_Calc
+                    LEFT JOIN   DBAmp_SF.dbo.Account
+                                ON Account.ID = MS_TopParent_Calc.TopParentID 
+    ) > 0
+    AND @LoopCounter < 20
   
 BEGIN
-  SET @LoopCounter = @LoopCounter + 1
-  
-  UPDATE DataAnalysis.dbo.MS_TopParent_Calc
-  SET    DataAnalysis.dbo.MS_TopParent_Calc.TopParentId = 
-           ISNULL( Account_SF.ParentId, DataAnalysis.dbo.MS_TopParent_Calc.TopParentId )
-  FROM   DataAnalysis.dbo.MS_TopParent_Calc
-         LEFT JOIN DBAmp_SF.dbo.Account AS Account_SF ON DataAnalysis.dbo.MS_TopParent_Calc.TopParentId = Account_SF.Id
+    SET @LoopCounter = @LoopCounter + 1
+
+    UPDATE      DataAnalysis.dbo.MS_TopParent_Calc
+    SET         TopParentID = ISNULL( Account.ParentID, MS_TopParent_Calc.TopParentID )
+                FROM    DataAnalysis.dbo.MS_TopParent_Calc
+                        LEFT JOIN   DBAmp_SF.dbo.Account
+                                    ON MS_TopParent_Calc.TopParentID = Account.ID
 END
 
 /***********************************************************************************************************************************************
